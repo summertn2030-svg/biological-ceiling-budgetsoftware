@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>The Biological Ceiling | Board</title>
+    <style>
+        body{background:#0A0F1A; font-family:sans-serif; color:#EFF3FC; padding:16px; display:flex; justify-content:center; align-items:center; min-height:100vh;}
+        .box{max-width:550px; width:100%; background:#080E1A; padding:20px; border-radius:20px; border:1px solid #00B4D8;}
+        h1{font-size:1.4rem; margin-bottom:2px; color:#60EFFF; text-align:center;}
+        .card{background:#0C1322; padding:15px; border-radius:12px; margin-bottom:12px; border:1px solid #1E2A3A;}
+        .row{display:flex; justify-content:space-between; margin:8px 0; font-family:monospace; font-size:1.1rem; color:#2AD4FF;}
+        .capacity-metric{font-size:0.8rem; color:#A4B3CD; background:#111A2E; padding:8px 12px; border-radius:6px; margin-top:8px; border-left:2px solid #00B4D8;}
+        input[type="range"]{width:100%; height:6px; cursor:pointer;}
+        .btn{background:linear-gradient(#00B4D8, #0077B6); color:white; border:none; padding:12px; width:100%; border-radius:50px; font-weight:bold; font-size:1rem; cursor:pointer; margin-top:15px;}
+        .btn:disabled{background:#333; color:#777; cursor:not-allowed;}
+        .status{text-align:center; font-size:0.75rem; margin-top:10px; color:#7E8FAA;}
+        .viz-container { display: flex; flex-direction: column; align-items: center; margin: 15px 0; padding: 10px; background: #0C1322; border-radius: 12px; border: 1px solid #1E2A3A; }
+        canvas { background:#07101c; border-radius:50%; margin-bottom: 8px; }
+        .legend { display: flex; gap: 12px; font-size: 0.7rem; justify-content: center; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+<div class="box" id="interactive-app">
+    </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    const TOTAL = 10000000;
+    let isMasterFrozen = false;
+
+    // Build or reset the physical HTML elements dynamically
+    function generateInterface() {
+        document.getElementById('interactive-app').innerHTML = `
+            <h1>🧬 THE BIOLOGICAL CEILING</h1>
+            <p style="font-size:0.7rem; color:#7E8FAA; text-align:center; margin-bottom:15px;">Board Allocation Tool</p>
+
+            <div class="viz-container">
+                <canvas id="budgetPie" width="140" height="140"></canvas>
+                <div class="legend" id="legendDiv"></div>
+            </div>
+
+            <div class="card">
+                <h3>🧬 ELT Research</h3>
+                <div class="row"><span id="elt$">$0</span><span id="elt%">33%</span></div>
+                <input type="range" id="elt" min="0" max="100" value="33">
+                <div class="capacity-metric" id="eltCap">Calculating capability...</div>
+            </div>
+
+            <div class="card">
+                <h3>🖨️ 3D Bio-Printing</h3>
+                <div class="row"><span id="bio$">$0</span><span id="bio%">33%</span></div>
+                <input type="range" id="bio" min="0" max="100" value="33">
+                <div class="capacity-metric" id="bioCap">Calculating capability...</div>
+            </div>
+
+            <div class="card">
+                <h3>💊 Existing Medicine</h3>
+                <div class="row"><span id="ex$">$0</span><span id="ex%">34%</span></div>
+                <input type="range" id="ex" min="0" max="100" value="34">
+                <div class="capacity-metric" id="exCap">Calculating capability...</div>
+            </div>
+
+            <button id="send" class="btn">📤 Submit Your Allocation</button>
+            <div id="status" class="status">Connected to Network</div>
+        `;
+
+        // Re-bind actions to new sliders
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        elt.addEventListener('input', () => handleSlide('elt'));
+        bio.addEventListener('input', () => handleSlide('bio'));
+        ex.addEventListener('input', () => handleSlide('ex'));
+        document.getElementById('send').addEventListener('click', executeSubmit);
+        
+        update();
+    }
+
+    function update() {
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        if(!elt) return;
+
+        let eVal = parseFloat(elt.value), bVal = parseFloat(bio.value), xVal = parseFloat(ex.value);
+        let eDol = Math.round((eVal/100)*TOTAL), bDol = Math.round((bVal/100)*TOTAL), xDol = Math.round((xVal/100)*TOTAL);
+
+        document.getElementById('elt$').innerText = '$' + eDol.toLocaleString();
+        document.getElementById('bio$').innerText = '$' + bDol.toLocaleString();
+        document.getElementById('ex$').innerText = '$' + xDol.toLocaleString();
+        document.getElementById('elt%').innerText = eVal + '%';
+        document.getElementById('bio%').innerText = bVal + '%';
+        document.getElementById('ex%').innerText = xVal + '%';
+
+        let eltTrials = Math.floor(eDol / 250000); 
+        let eltPatients = (eVal * 1.5).toFixed(0);
+        document.getElementById('eltCap').innerHTML = `Funding capacity: <strong>${eltTrials}</strong> clinical laboratory trials / targeting <strong>${eltPatients}</strong> test candidate cohorts.`;
+
+        let bioOrgans = (bVal * 0.4).toFixed(1);
+        let bioScaffolds = Math.floor(bDol / 50000);
+        document.getElementById('bioCap').innerHTML = `Funding capacity: <strong>${bioOrgans}</strong> fully functioning printed organ(s) / <strong>${bioScaffolds}</strong> cellular scaffolds.`;
+
+        let medBedDays = Math.floor(xDol / 1200);
+        let medAntibiotics = Math.floor(xDol / 150).toLocaleString();
+        document.getElementById('exCap').innerHTML = `Funding capacity: <strong>${medBedDays}</strong> hospital patient days / <strong>${medAntibiotics}</strong> heavy antibiotic treatment doses.`;
+
+        drawPie(eVal/100, bVal/100, xVal/100);
+    }
+
+    function drawPie(e, b, x) {
+        const canvas = document.getElementById('budgetPie');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        let start = -Math.PI / 2;
+        let slices = [e, b, x], colors = ["#1A7FAA", "#3D9FD1", "#00B4D8"], names = ["ELT", "Bio", "Med"];
+        
+        for (let i = 0; i < 3; i++) {
+            let angle = slices[i] * 2 * Math.PI;
+            ctx.beginPath(); ctx.fillStyle = colors[i]; ctx.moveTo(w / 2, h / 2);
+            ctx.arc(w / 2, h / 2, w / 2 - 4, start, start + angle); ctx.fill();
+            start += angle;
+        }
+
+        let leg = '';
+        for (let i = 0; i < 3; i++) { leg += `<span style="color:${colors[i]}">●</span> ${names[i]} ${(slices[i] * 100).toFixed(0)}% `; }
+        document.getElementById('legendDiv').innerHTML = leg;
+    }
+
+    function handleSlide(changed){
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        let e=parseFloat(elt.value), b=parseFloat(bio.value), x=parseFloat(ex.value);
+        if(changed==='elt'){ let r=b+x; if(r===0){b=50;x=50;}else{let f=(100-e)/r; b*=f; x*=f;} elt.value=e; bio.value=b; ex.value=x; }
+        else if(changed==='bio'){ let r=e+x; if(r===0){e=50;x=50;}else{let f=(100-b)/r; e*=f; x*=f;} elt.value=e; bio.value=b; ex.value=x; }
+        else { let r=e+b; if(r===0){e=50;b=50;}else{let f=(100-x)/r; e*=f; b*=f;} elt.value=e; bio.value=b; ex.value=x; }
+        update();
+    }
+
+    function executeSubmit() {
+        if(isMasterFrozen) return;
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        socket.emit('submit', { elt: elt.value/100, bio: bio.value/100, exist: ex.value/100 });
+        
+        document.getElementById('interactive-app').innerHTML = `
+            <h1 style="text-align:center; margin-top:40px;">🧬 TRANSMISSION COMPLETE</h1>
+            <p style="text-align:center; color:#7E8FAA; margin-top:10px;">Your budget allocations have been routed to the CFO terminal.</p>
+            <div style="text-align:center; font-size:4rem; margin:30px 0;">🔒</div>
+            <p style="text-align:center; color:#60EFFF; font-size:0.8rem;">Please await further instructions from the Board Director.</p>
+        `;
+    }
+
+    // When the CFO starts a new session, completely refresh the interface structure
+    socket.on('update', (votes) => {
+        if (votes.length === 0) {
+            generateInterface();
+        }
+    });
+
+    socket.on('voting_state_changed', (isOpen) => {
+        isMasterFrozen = !isOpen;
+        const btn = document.getElementById('send');
+        if (!btn) return;
+        btn.disabled = isMasterFrozen;
+        btn.innerText = isMasterFrozen ? "🛑 Voting Temporarily Frozen" : "📤 Submit Your Allocation";
+    });
+
+    generateInterface();
+</script>
+</body>
+</html>
