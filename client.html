@@ -21,63 +21,68 @@
     </style>
 </head>
 <body>
-<div class="box">
-    <h1>🧬 THE BIOLOGICAL CEILING</h1>
-    <p style="font-size:0.7rem; color:#7E8FAA; text-align:center; margin-bottom:15px;">Board Allocation Tool</p>
-
-    <!-- Interactive Live Allocation Visualizer -->
-    <div class="viz-container">
-        <canvas id="budgetPie" width="140" height="140"></canvas>
-        <div class="legend" id="legendDiv"></div>
+<div class="box" id="interactive-app">
     </div>
-
-    <!-- Sector 1 -->
-    <div class="card">
-        <h3>🧬 ELT Research</h3>
-        <div class="row"><span id="elt$">$0</span><span id="elt%">33%</span></div>
-        <input type="range" id="elt" min="0" max="100" value="33">
-        <div class="capacity-metric" id="eltCap">Calculating capability...</div>
-    </div>
-
-    <!-- Sector 2 -->
-    <div class="card">
-        <h3>🖨️ 3D Bio-Printing</h3>
-        <div class="row"><span id="bio$">$0</span><span id="bio%">33%</span></div>
-        <input type="range" id="bio" min="0" max="100" value="33">
-        <div class="capacity-metric" id="bioCap">Calculating capability...</div>
-    </div>
-
-    <!-- Sector 3 -->
-    <div class="card">
-        <h3>💊 Existing Medicine</h3>
-        <div class="row"><span id="ex$">$0</span><span id="ex%">34%</span></div>
-        <input type="range" id="ex" min="0" max="100" value="34">
-        <div class="capacity-metric" id="exCap">Calculating capability...</div>
-    </div>
-
-    <button id="send" class="btn">📤 Submit Your Allocation</button>
-    <div id="status" class="status">Connected to Network</div>
-</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
     const TOTAL = 10000000;
-    
-    const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
-    const canvas = document.getElementById('budgetPie'), ctx = canvas.getContext('2d');
     let isMasterFrozen = false;
 
-    function update() {
-        let eVal = parseFloat(elt.value);
-        let bVal = parseFloat(bio.value);
-        let xVal = parseFloat(ex.value);
-        
-        let eDol = Math.round((eVal/100)*TOTAL);
-        let bDol = Math.round((bVal/100)*TOTAL);
-        let xDol = Math.round((xVal/100)*TOTAL);
+    // Build or reset the physical HTML elements dynamically
+    function generateInterface() {
+        document.getElementById('interactive-app').innerHTML = `
+            <h1>🧬 THE BIOLOGICAL CEILING</h1>
+            <p style="font-size:0.7rem; color:#7E8FAA; text-align:center; margin-bottom:15px;">Board Allocation Tool</p>
 
-        // Update basic text readouts
+            <div class="viz-container">
+                <canvas id="budgetPie" width="140" height="140"></canvas>
+                <div class="legend" id="legendDiv"></div>
+            </div>
+
+            <div class="card">
+                <h3>🧬 ELT Research</h3>
+                <div class="row"><span id="elt$">$0</span><span id="elt%">33%</span></div>
+                <input type="range" id="elt" min="0" max="100" value="33">
+                <div class="capacity-metric" id="eltCap">Calculating capability...</div>
+            </div>
+
+            <div class="card">
+                <h3>🖨️ 3D Bio-Printing</h3>
+                <div class="row"><span id="bio$">$0</span><span id="bio%">33%</span></div>
+                <input type="range" id="bio" min="0" max="100" value="33">
+                <div class="capacity-metric" id="bioCap">Calculating capability...</div>
+            </div>
+
+            <div class="card">
+                <h3>💊 Existing Medicine</h3>
+                <div class="row"><span id="ex$">$0</span><span id="ex%">34%</span></div>
+                <input type="range" id="ex" min="0" max="100" value="34">
+                <div class="capacity-metric" id="exCap">Calculating capability...</div>
+            </div>
+
+            <button id="send" class="btn">📤 Submit Your Allocation</button>
+            <div id="status" class="status">Connected to Network</div>
+        `;
+
+        // Re-bind actions to new sliders
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        elt.addEventListener('input', () => handleSlide('elt'));
+        bio.addEventListener('input', () => handleSlide('bio'));
+        ex.addEventListener('input', () => handleSlide('ex'));
+        document.getElementById('send').addEventListener('click', executeSubmit);
+        
+        update();
+    }
+
+    function update() {
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
+        if(!elt) return;
+
+        let eVal = parseFloat(elt.value), bVal = parseFloat(bio.value), xVal = parseFloat(ex.value);
+        let eDol = Math.round((eVal/100)*TOTAL), bDol = Math.round((bVal/100)*TOTAL), xDol = Math.round((xVal/100)*TOTAL);
+
         document.getElementById('elt$').innerText = '$' + eDol.toLocaleString();
         document.getElementById('bio$').innerText = '$' + bDol.toLocaleString();
         document.getElementById('ex$').innerText = '$' + xDol.toLocaleString();
@@ -85,7 +90,6 @@
         document.getElementById('bio%').innerText = bVal + '%';
         document.getElementById('ex%').innerText = xVal + '%';
 
-        // Neutral Capability Data Framework (No warnings, purely scaling stats)
         let eltTrials = Math.floor(eDol / 250000); 
         let eltPatients = (eVal * 1.5).toFixed(0);
         document.getElementById('eltCap').innerHTML = `Funding capacity: <strong>${eltTrials}</strong> clinical laboratory trials / targeting <strong>${eltPatients}</strong> test candidate cohorts.`;
@@ -98,11 +102,13 @@
         let medAntibiotics = Math.floor(xDol / 150).toLocaleString();
         document.getElementById('exCap').innerHTML = `Funding capacity: <strong>${medBedDays}</strong> hospital patient days / <strong>${medAntibiotics}</strong> heavy antibiotic treatment doses.`;
 
-        // Render the visual companion pie chart
         drawPie(eVal/100, bVal/100, xVal/100);
     }
 
     function drawPie(e, b, x) {
+        const canvas = document.getElementById('budgetPie');
+        if(!canvas) return;
+        const ctx = canvas.getContext('2d');
         let w = canvas.width, h = canvas.height;
         ctx.clearRect(0, 0, w, h);
         let start = -Math.PI / 2;
@@ -110,22 +116,18 @@
         
         for (let i = 0; i < 3; i++) {
             let angle = slices[i] * 2 * Math.PI;
-            ctx.beginPath(); 
-            ctx.fillStyle = colors[i]; 
-            ctx.moveTo(w / 2, h / 2);
-            ctx.arc(w / 2, h / 2, w / 2 - 4, start, start + angle); 
-            ctx.fill();
+            ctx.beginPath(); ctx.fillStyle = colors[i]; ctx.moveTo(w / 2, h / 2);
+            ctx.arc(w / 2, h / 2, w / 2 - 4, start, start + angle); ctx.fill();
             start += angle;
         }
 
         let leg = '';
-        for (let i = 0; i < 3; i++) {
-            leg += `<span style="color:${colors[i]}">●</span> ${names[i]} ${(slices[i] * 100).toFixed(0)}% `;
-        }
+        for (let i = 0; i < 3; i++) { leg += `<span style="color:${colors[i]}">●</span> ${names[i]} ${(slices[i] * 100).toFixed(0)}% `; }
         document.getElementById('legendDiv').innerHTML = leg;
     }
 
     function handleSlide(changed){
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
         let e=parseFloat(elt.value), b=parseFloat(bio.value), x=parseFloat(ex.value);
         if(changed==='elt'){ let r=b+x; if(r===0){b=50;x=50;}else{let f=(100-e)/r; b*=f; x*=f;} elt.value=e; bio.value=b; ex.value=x; }
         else if(changed==='bio'){ let r=e+x; if(r===0){e=50;x=50;}else{let f=(100-b)/r; e*=f; x*=f;} elt.value=e; bio.value=b; ex.value=x; }
@@ -133,37 +135,35 @@
         update();
     }
 
-    elt.addEventListener('input', () => handleSlide('elt'));
-    bio.addEventListener('input', () => handleSlide('bio'));
-    ex.addEventListener('input', () => handleSlide('ex'));
-
-    document.getElementById('send').addEventListener('click', () => {
+    function executeSubmit() {
         if(isMasterFrozen) return;
+        const elt = document.getElementById('elt'), bio = document.getElementById('bio'), ex = document.getElementById('ex');
         socket.emit('submit', { elt: elt.value/100, bio: bio.value/100, exist: ex.value/100 });
         
-        document.querySelector('.box').innerHTML = `
+        document.getElementById('interactive-app').innerHTML = `
             <h1 style="text-align:center; margin-top:40px;">🧬 TRANSMISSION COMPLETE</h1>
             <p style="text-align:center; color:#7E8FAA; margin-top:10px;">Your budget allocations have been routed to the CFO terminal.</p>
             <div style="text-align:center; font-size:4rem; margin:30px 0;">🔒</div>
             <p style="text-align:center; color:#60EFFF; font-size:0.8rem;">Please await further instructions from the Board Director.</p>
         `;
+    }
+
+    // When the CFO starts a new session, completely refresh the interface structure
+    socket.on('update', (votes) => {
+        if (votes.length === 0) {
+            generateInterface();
+        }
     });
 
     socket.on('voting_state_changed', (isOpen) => {
         isMasterFrozen = !isOpen;
         const btn = document.getElementById('send');
         if (!btn) return;
-        
-        if (isMasterFrozen) {
-            btn.disabled = true;
-            btn.innerText = "🛑 Voting Temporarily Frozen";
-        } else {
-            btn.disabled = false;
-            btn.innerText = "📤 Submit Your Allocation";
-        }
+        btn.disabled = isMasterFrozen;
+        btn.innerText = isMasterFrozen ? "🛑 Voting Temporarily Frozen" : "📤 Submit Your Allocation";
     });
 
-    update();
+    generateInterface();
 </script>
 </body>
 </html>
